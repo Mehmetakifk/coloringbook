@@ -46,7 +46,15 @@ with st.sidebar:
     
     coloring_prompt = st.text_area(
         "Boyama Kitabı Promptu", 
-        value="Bu resmi bir çocuk boyama kitabı sayfasına dönüştür. Sadece kalın, net siyah çizgiler kullan, tüm renkleri çıkar, arka planı tamamen beyaz yap. Çıktı olarak sadece resmi ver.",
+        value="""Sen, kullanıcıların yüklediği görüntüleri boyama kitabı sayfalarına (color-book) dönüştürmek için tasarlanmış özel bir asistansın. 
+Kullanıcı bir görüntü yüklediğinde, bu görüntünün stilini bir "boyama kitabı çizimi"ne dönüştür. 
+1. **Siyah Beyaz:** Sadece siyah çizgiler ve beyaz arka plan kullan. Hiçbir renk, gri tonlama (shading) veya gölgeleme kullanma. 
+2. **Net Çizgiler:** Görüntüdeki ana nesnelerin ve detayların kenarlarını belirgin, net ve temiz siyah çizgilerle çiz. 
+3. **Beyaz Alanlar:** Tüm nesnelerin iç kısımları tamamen boş ve beyaz olmalıdır. 
+4. **Basitlik:** Karmaşık dokuları ve gölgeleri kaldır. Sadece en önemli şekil ve çizgileri koru. 
+5. **Yanıt:** Yalnızca dönüştürülmüş boyama kitabı resmini döndür. Metin açıklaması, karşılama mesajı veya açıklama ekleme. 
+- Çıktı: Yalnızca boyama kitabı tarzında oluşturulmuş bir görüntü.""",
+        height=300,
         help="Resmi dönüştürürken kullanılacak ana talimat."
     )
     
@@ -64,7 +72,27 @@ if not api_key:
 
 # Gemini'yi yapılandır
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel(model_name=model_name)
+
+# Resim Boyutunu Optimize Etme (Token Tasarrufu İçin)
+def optimize_image(image):
+    # Maksimum 1024px genişlik/yükseklik boyama kitabı için yeterlidir
+    max_size = (1024, 1024)
+    image.thumbnail(max_size, Image.Resampling.LANCZOS)
+    return image
+
+# Modeli oluştur
+# Token tasarrufu için yapılandırma ekliyoruz
+generation_config = {
+    "temperature": 0.4, # Daha tutarlı sonuçlar için düşürüldü
+    "top_p": 1,
+    "top_k": 32,
+    "max_output_tokens": 2048, # Sadece resim döneceği için çok yüksek olmasına gerek yok
+}
+
+model = genai.GenerativeModel(
+    model_name=model_name,
+    generation_config=generation_config
+)
 
 # Resim Yükleme
 uploaded_file = st.file_uploader("Resim Yükle", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
@@ -77,9 +105,13 @@ if uploaded_file is not None:
         st.image(image, caption="Orijinal", use_container_width=True)
     
     if st.button("✨ PDF Olarak Hazırla"):
-        with st.spinner("İşleniyor..."):
+        with st.spinner("Tokenlar optimize ediliyor ve işleniyor..."):
             try:
-                response = model.generate_content([coloring_prompt, image])
+                # Resmi küçült (Token tasarrufu burada başlar)
+                optimized_img = optimize_image(image)
+                
+                # Sadece gerekli veriyi gönder (Geçmişi gönderme!)
+                response = model.generate_content([coloring_prompt, optimized_img])
                 
                 generated_image_bytes = None
                 for part in response.candidates[0].content.parts:
