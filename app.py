@@ -13,17 +13,24 @@ load_dotenv()
 # Sayfa yapılandırması
 st.set_page_config(page_title="Boyama Kitabı Oluşturucu", page_icon="🎨")
 
-# PDF Oluşturma Fonksiyonu (Sadece Resim Odaklı)
+from reportlab.lib.utils import ImageReader
+
+# PDF Oluşturma Fonksiyonu (Düzeltilmiş ve Optimize Edilmiş)
 def create_pdf(image_bytes):
-    img = Image.open(io.BytesIO(image_bytes))
+    # Resmi bellekten oku
+    img_data = io.BytesIO(image_bytes)
+    img = Image.open(img_data)
     img_width, img_height = img.size
+    
+    # ReportLab için ImageReader kullan (Hata giderildi)
+    img_reader = ImageReader(img)
     
     buffer = io.BytesIO()
     # Sayfa boyutunu resmin boyutuna eşitle
     c = canvas.Canvas(buffer, pagesize=(img_width, img_height))
     
-    # Resmi tam sayfa olarak yerleştir (kenar boşluğu olmadan)
-    c.drawImage(io.BytesIO(image_bytes), 0, 0, width=img_width, height=img_height)
+    # Resmi tam sayfa olarak yerleştir
+    c.drawImage(img_reader, 0, 0, width=img_width, height=img_height)
     c.showPage()
     c.save()
     buffer.seek(0)
